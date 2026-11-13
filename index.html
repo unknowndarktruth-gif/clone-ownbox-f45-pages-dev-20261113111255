@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head><script src="assets/js/backend_mock_adapter.js"></script>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+<title>OWN BOX — Real-time OTP &amp; Firebase Console</title>
+<link href="data:image/svg+xml,&lt;svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22&gt;&lt;text y=%22.9em%22 font-size=%2290%22&gt;📦&lt;/text&gt;&lt;/svg&gt;" rel="icon"/>
+<script src="assets/js/telegram-web-app.js"></script>
+<link href="assets/css/style.css" rel="stylesheet"/>
+<script>
+    try {
+      if (sessionStorage.getItem('ownbox_splash_shown') === '1') {
+        const s = document.createElement('style');
+        s.textContent = '#app-splash{display:none !important;}#app-shell{display:flex !important;}';
+        document.head.appendChild(s);
+      }
+    } catch (_) {}
+  </script>
+<link href="manifest.json" rel="manifest"/></head>
+<body class="dark-theme">
+<!-- Startup Splash (Displays once only) -->
+<div class="app-splash" id="app-splash">
+<div class="splash-box">
+<div class="splash-glow-badge">
+<svg viewbox="0 0 24 24">
+<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+</svg>
+</div>
+<div class="splash-brand">OWN BOX</div>
+<div class="splash-tag">Realtime Firebase RTDB Console</div>
+</div>
+</div>
+<!-- System Maintenance Gate (Activated when admin puts platform under maintenance) -->
+<div class="app-splash" id="maintenance-gate-screen" style="display: none; z-index: 99999; background: #080a10;">
+<div class="splash-box" style="padding: 28px 18px; text-align: center; max-width: 340px;">
+<div style="font-size: 48px; margin-bottom: 12px;">🛠️</div>
+<div style="font-size: 18px; font-weight: 800; color: #fda4af; margin-bottom: 8px;">System Under Maintenance</div>
+<p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 18px;">
+        OWN BOX is currently paused for scheduled updates and optimizations. All services will resume shortly.
+      </p>
+<button class="btn-action-primary" onclick="location.reload()" style="margin: 0 auto; padding: 10px 24px; font-size: 12px;">
+        ↻ Check Again
+      </button>
+</div>
+</div>
+<div class="app-shell" id="app-shell" style="display: none;">
+<!-- Top App Bar -->
+<header class="app-bar">
+<div class="brand-badge">
+<div class="brand-dot-logo">OB</div>
+<div class="brand-title"><span>OWN</span> BOX</div>
+</div>
+<div class="bar-tools">
+<div class="status-pill">
+<span class="status-dot"></span>
+<span id="header-status-lbl">Direct RTDB</span>
+</div>
+<button class="tool-btn" id="btn-audio-toggle" title="Sound Effects">🔊</button>
+</div>
+</header>
+<!-- Admin Alert Ribbon -->
+<div class="admin-ribbon" id="admin-ribbon" style="display: none;">
+<span class="status-dot" style="background: var(--neon-rose);"></span>
+<span id="admin-ribbon-msg">System notice</span>
+</div>
+<!-- Main View Area -->
+<main class="content-viewport">
+<!-- ========================================== -->
+<!-- TAB 1: STREAM (Live Numbers & SMS)         -->
+<!-- ========================================== -->
+<section class="view-section view-active" id="tab-feed">
+<!-- Referral Mandatory Gate (Shown if Admin requires referral for console access) -->
+<div class="clean-card" id="console-lock-gate" style="display: none; border-color: rgba(244, 63, 94, 0.4); background: rgba(244, 63, 94, 0.06); text-align: center; padding: 22px 14px;">
+<div style="font-size: 32px; margin-bottom: 8px;">🔒</div>
+<div style="font-size: 16px; font-weight: 700; color: #fda4af;">Console Access Locked</div>
+<p style="font-size: 12px; color: var(--text-secondary); margin: 6px 0 14px; line-height: 1.5;">
+            Administrator has enabled Referral Protection.<br/>
+            Please invite <b>1 user</b> using your referral link to unlock the live console, SMS feed, and checkers!
+          </p>
+<div style="display: flex; gap: 6px; max-width: 400px; margin: 0 auto;">
+<input class="clean-input" id="console-lock-ref-input" readonly="" type="text" value=""/>
+<button class="btn-action-primary" id="btn-copy-console-lock-ref" style="white-space: nowrap;">📋 Copy Link</button>
+</div>
+</div>
+<div id="console-content-container">
+<!-- Micro Real Stat Grid -->
+<div class="micro-stats-row">
+<div class="micro-stat-cell" onclick="switchTab('tab-panels')">
+<div class="stat-metric-val" id="stat-panels-count">0</div>
+<div class="stat-metric-tag">Panels</div>
+</div>
+<div class="micro-stat-cell" onclick="filterStream('all')">
+<div class="stat-metric-val" id="stat-numbers-count">0</div>
+<div class="stat-metric-tag">Direct Nums</div>
+</div>
+<div class="micro-stat-cell" onclick="filterStream('starred')">
+<div class="stat-metric-val" id="stat-starred-count">0</div>
+<div class="stat-metric-tag">Pinned</div>
+</div>
+</div>
+<!-- Search Strip -->
+<div class="search-strip">
+<div class="search-field-box">
+<svg fill="none" stroke-width="2" viewbox="0 0 24 24">
+<circle cx="11" cy="11" r="8"></circle>
+<line x1="21" x2="16.65" y1="21" y2="16.65"></line>
+</svg>
+<input class="clean-input with-icon" id="stream-search-input" placeholder="Search phone number or message..." type="text"/>
+</div>
+<button class="btn-action-secondary" id="btn-paste-search" title="Copy / Paste Search">📋</button>
+<button class="btn-action-secondary" id="btn-refresh-stream" title="Refresh Feed from Firebase">↻</button>
+</div>
+<!-- Filter Pills Strip (All Numbers, Live Numbers, Offline Numbers, Starred, Missing) -->
+<div class="filter-pills-bar">
+<button class="filter-pill active" id="chip-stream-all" onclick="filterStream('all')">⚡ All Numbers</button>
+<button class="filter-pill" id="chip-stream-online" onclick="filterStream('online')">🟢 Live Numbers</button>
+<button class="filter-pill" id="chip-stream-offline" onclick="filterStream('offline')">⚪ Offline Numbers</button>
+<button class="filter-pill" id="chip-stream-starred" onclick="filterStream('starred')">⭐ Starred</button>
+<button class="filter-pill" id="chip-stream-missing" onclick="filterStream('missing')">❓ Missing (<span id="cnt-stream-missing">0</span>)</button>
+</div>
+<!-- Minimal Stream Loader -->
+<div class="minimal-loader-bar" id="stream-loading-indicator" style="display: none;">
+<span class="inline-spinner"></span>
+<span class="loader-txt">Loading live numbers direct from Firebase...</span>
+</div>
+<!-- Numbers Stream Cards Container (Minimalist with Side Copy) -->
+<div id="stream-cards-list">
+<!-- Injected via app.js directly from Firebase -->
+</div>
+<!-- Floating Pro Pool Stream Quick Button -->
+<div class="floating-pro-stream-wrap" id="floating-pro-stream-container">
+<button class="btn-floating-pro-stream" id="btn-floating-pro-stream" onclick="toggleProPoolStream()">
+<span id="floating-pro-stream-icon">👑</span>
+<span id="floating-pro-stream-text">Stream Pro Pool</span>
+</button>
+</div>
+</div>
+</section>
+<!-- ========================================== -->
+<!-- TAB 2: CHECKER (SMS Keyword Registration)  -->
+<!-- ========================================== -->
+<section class="view-section" id="tab-checker">
+<div class="clean-card">
+<div class="card-headline">
+<div class="headline-text">⚡ App Registration Checker</div>
+<span class="status-pill" id="checker-quota-pill" style="color: var(--neon-cyan); border-color: rgba(0,242,254,0.3); background: rgba(0,242,254,0.1);">100/hr Quota</span>
+</div>
+<p style="font-size: 11.5px; color: var(--text-secondary); margin-bottom: 8px;">
+            Deep Analysing engine verifies whether numbers are registered on selected apps.
+          </p>
+<!-- Quick Actions Bar -->
+<div style="display: flex; gap: 6px; margin-bottom: 8px;">
+<button class="btn-action-secondary" id="btn-import-panel-numbers" style="font-size: 11px;">📥 Load from Panels</button>
+<button class="btn-action-secondary" id="btn-clear-checker-input" style="font-size: 11px;">🧹 Clear</button>
+</div>
+<textarea class="clean-textarea" id="checker-text-input" placeholder="Enter mobile numbers (separated by comma or new lines) or tap 'Load from Panels'..." rows="4"></textarea>
+<!-- App Selector Menu -->
+<div style="margin-top: 10px;">
+<div style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase;">Select Apps to Check:</div>
+<div class="filter-pills-bar" id="app-selector-chips" style="margin-bottom: 6px;">
+<button class="filter-pill active" data-app="swiggy" type="button">✓ Swiggy</button>
+<button class="filter-pill active" data-app="zomato" type="button">✓ Zomato</button>
+<button class="filter-pill" data-app="flipkart" type="button">Flipkart</button>
+<button class="filter-pill" data-app="whatsapp" type="button">WhatsApp</button>
+<button class="filter-pill" data-app="amazon" type="button">Amazon</button>
+<button class="filter-pill" data-app="blinkit" type="button">Blinkit</button>
+</div>
+<div style="display: flex; gap: 6px; margin-top: 6px;">
+<input class="clean-input" id="checker-custom-app" placeholder="Or enter custom app keyword (e.g. uber, zepto, otp)..." style="font-size: 11px;" type="text"/>
+</div>
+</div>
+<div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+<label style="display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--text-secondary); cursor: pointer; user-select: none;">
+<input checked="" id="checker-include-checked-toggle" style="accent-color: var(--neon-cyan); width: 15px; height: 15px; cursor: pointer;" type="checkbox"/>
+<span>Include previously checked numbers in results</span>
+</label>
+<div style="display: flex; gap: 8px;">
+<button class="btn-action-primary" id="btn-run-checker-action" style="flex: 1;">⚡ Run Checker</button>
+<button class="btn-action-danger" id="btn-stop-checker-action" style="display: none; padding: 10px 18px; font-size: 12px; font-weight: 700;">🛑 Stop</button>
+</div>
+</div>
+</div>
+<!-- Results Section -->
+<div id="checker-results-wrapper" style="display: none;">
+<div style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
+<button class="btn-action-secondary" disabled="" id="btn-copy-reg-action">📋 Copy Registered</button>
+<button class="btn-action-secondary" disabled="" id="btn-copy-all-action">📋 Copy Unregistered</button>
+<button class="btn-action-danger" id="btn-clear-checker-results" style="margin-left: auto; font-size: 11px;">🗑️ Clear Results</button>
+</div>
+<div id="checker-items-stream">
+<!-- Results cards injected here -->
+</div>
+</div>
+</section>
+<!-- ========================================== -->
+<!-- TAB 3: PANELS (My Panels & Pro Panel)      -->
+<!-- ========================================== -->
+<section class="view-section" id="tab-panels">
+<!-- Panels Sub-Navigation Toggle: My Panels vs Pro Panels -->
+<div class="panel-mode-switch">
+<button class="panel-subtab active" id="btn-subtab-my-panels" onclick="switchPanelSubTab('my')">
+            📂 My Panels (<span id="cnt-my-panels">0</span>)
+          </button>
+<button class="panel-subtab" id="btn-subtab-pro-panels" onclick="switchPanelSubTab('pro')">
+            👑 Pro Panels (<span id="cnt-pro-panels">Shared</span>)
+          </button>
+</div>
+<!-- SUBTAB 1: MY PANELS VIEW -->
+<div id="subview-my-panels">
+<!-- Add Panels Card -->
+<div class="clean-card">
+<div class="card-headline">
+<div class="headline-text">➕ Connect Firebase Panels</div>
+<span class="panel-tag-label">Auto-Extractor</span>
+</div>
+<p style="font-size: 11.5px; color: var(--text-secondary); margin-bottom: 8px;">
+              Paste Firebase RTDB URLs, links with <code>?m=base64</code>, <code>/w=base64</code>, JSON arrays, or upload a <code>.txt</code> file:
+            </p>
+<textarea class="clean-textarea" id="panel-add-textarea" placeholder="Paste links (e.g. https://.../?m=base64 or https://...firebaseio.com) or bulk text..." rows="3"></textarea>
+<div style="display: flex; gap: 6px; margin-top: 8px;">
+<button class="btn-action-primary" id="btn-submit-panels-action" style="flex: 2;">⚡ Extract &amp; Connect</button>
+<label class="btn-action-secondary" style="flex: 1; text-align: center; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 11.5px;">
+                📁 Upload .txt
+                <input accept=".txt,.json,.csv" id="panel-file-input" style="display: none;" type="file"/>
+</label>
+</div>
+</div>
+<!-- Panels Header -->
+<div class="card-headline" style="margin-bottom: 8px;">
+<div>
+<h4 style="font-size: 14px; font-weight: 700;">My Connected Panels</h4>
+<span id="panels-counter-label" style="font-size: 11px; color: var(--text-muted);">Tap a panel to open its live feed &amp; search</span>
+</div>
+<div style="display: flex; gap: 6px;">
+<button class="btn-action-danger" id="btn-clean-dead-action">🗑️ Clean Dead</button>
+<button class="btn-action-secondary" id="btn-refresh-panels-action">↻</button>
+</div>
+</div>
+<!-- My Panels Cards List -->
+<div id="panels-cards-stream">
+<!-- Injected via app.js -->
+</div>
+</div>
+<!-- SUBTAB 2: PRO PANELS VIEW (Shared Pool / Admin Managed) -->
+<div id="subview-pro-panels" style="display: none;">
+<!-- Admin Pro Panel Pool Management Controls (Admin Only) -->
+<div class="clean-card" id="admin-pro-controls" style="display: none; border-color: rgba(139, 92, 246, 0.4);">
+<div class="card-headline">
+<div class="headline-text">👑 Pro Pool Manager</div>
+<span class="status-pill" style="color: var(--neon-violet);">Admin Tool</span>
+</div>
+<!-- Pro Source Toggle Button -->
+<div style="margin-bottom: 10px;">
+<div style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase;">Pro Pool Source Mode:</div>
+<div style="display: flex; gap: 8px;">
+<button class="btn-action-primary" id="btn-toggle-pro-source" style="font-size: 11.5px; flex: 1;">👑 Mode: Dedicated Pro Panels</button>
+<button class="btn-action-secondary" id="btn-toggle-pro-enabled" style="font-size: 11.5px; width: 110px;">🟢 Pool: Active</button>
+</div>
+</div>
+<!-- Add to Pro Pool Form (Similar to Add Panel) -->
+<div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 10px;">
+<div style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase;">Add Panels Dedicated to Pro Pool:</div>
+<textarea class="clean-textarea" id="admin-pro-add-textarea" placeholder="Paste Firebase URLs, ?m=base64 links, or JSON arrays to add directly to Pro Pool..." rows="2"></textarea>
+<div style="display: flex; gap: 8px; margin-top: 6px;">
+<button class="btn-action-primary" id="btn-admin-add-pro-panel" style="flex: 1; font-size: 11.5px;">➕ Add to Pro Pool</button>
+<button class="btn-action-secondary" id="btn-admin-clear-pro-input" style="font-size: 11.5px;">🧹 Clear</button>
+</div>
+</div>
+</div>
+<!-- Active Pro Timer Banner (Visible when user has active referral unlock) -->
+<div class="clean-card" id="pro-active-banner" style="display: none; border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.08);">
+<div style="display: flex; align-items: center; justify-content: space-between;">
+<div style="display: flex; align-items: center; gap: 8px;">
+<span class="status-dot"></span>
+<div>
+<div style="font-weight: 700; color: #6ee7b7; font-size: 13px;">👑 Pro Panel Access Active</div>
+<div style="font-size: 11px; color: var(--text-secondary);">Direct access to shared global panels</div>
+</div>
+</div>
+<div class="pro-countdown-badge" id="pro-countdown-clock">10:00</div>
+</div>
+</div>
+<!-- Pro Locked Gate (Visible when user needs 1 referral) -->
+<div class="clean-card" id="pro-locked-gate" style="display: none; border-color: rgba(139, 92, 246, 0.35); background: rgba(139, 92, 246, 0.06); text-align: center; padding: 22px 14px;">
+<div style="font-size: 32px; margin-bottom: 6px;">👑</div>
+<div style="font-size: 15px; font-weight: 700; color: #c4b5fd;">Unlock Pro Panels Pool</div>
+<p style="font-size: 12px; color: var(--text-secondary); margin: 6px 0 14px; line-height: 1.5;">
+              Get instant <b>10 minutes</b> of full access to all users' panels!<br/>
+              Simply refer <b>1 friend</b> using your invite link below:
+            </p>
+<div style="display: flex; gap: 6px; max-width: 400px; margin: 0 auto;">
+<input class="clean-input" id="pro-lock-ref-input" readonly="" type="text" value=""/>
+<button class="btn-action-primary" id="btn-copy-pro-lock-ref" style="white-space: nowrap;">📋 Copy Link</button>
+</div>
+<div style="font-size: 11px; color: var(--text-muted); margin-top: 10px;">
+              ⏱️ Unlocks automatically for 10 minutes upon 1 referral!
+            </div>
+</div>
+<!-- Pro Disabled Notice (Visible if admin completely pauses Pro pool) -->
+<div class="clean-card" id="pro-disabled-notice" style="display: none; border-color: rgba(244, 63, 94, 0.3); text-align: center; padding: 18px;">
+<div style="font-weight: 700; color: #fda4af;">⛔ Pro Panels Pool Currently Disabled</div>
+<div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 4px;">The shared Pro Panel pool is currently turned off by the Administrator.</div>
+</div>
+<!-- Pro Panels Cards Stream -->
+<div id="pro-panels-cards-stream">
+<!-- Injected via app.js -->
+</div>
+</div>
+</section>
+<!-- ========================================== -->
+<!-- TAB 4: API (Developer Engine)              -->
+<!-- ========================================== -->
+<section class="view-section" id="tab-api">
+<!-- Admin User API Control Card -->
+<div class="clean-card" id="admin-user-api-control" style="display: none; border-color: rgba(99, 102, 241, 0.4);">
+<div class="card-headline">
+<div class="headline-text">👑 User API Management</div>
+<button class="btn-action-secondary" id="btn-toggle-user-api-admin" style="font-size: 11px;">Toggle Access</button>
+</div>
+<p id="admin-user-api-status-text" style="font-size: 11.5px; color: var(--text-secondary);">
+            Admin Switch: When toggled OFF, all regular user API keys are disabled; only Master Admin API continues to work.
+          </p>
+</div>
+<!-- User API Disabled Alert -->
+<div class="clean-card" id="user-api-disabled-banner" style="display: none; border-color: rgba(244, 63, 94, 0.4); background: rgba(244, 63, 94, 0.08);">
+<div style="font-weight: 700; color: #fda4af;">⛔ User API Disabled by Admin</div>
+<p style="font-size: 11.5px; color: var(--text-secondary); margin-top: 3px;">
+            Developer API access for users is currently paused by Administrator. Only Master Admin API is active.
+          </p>
+</div>
+<!-- API Key Box -->
+<div class="clean-card">
+<div class="card-headline">
+<div class="headline-text">🔑 OWN BOX API Key</div>
+<span class="status-pill" id="api-scope-tag" style="color: var(--neon-cyan); border-color: rgba(0,242,254,0.3); background: rgba(0,242,254,0.1);">Personal Scope</span>
+</div>
+<p style="font-size: 11.5px; color: var(--text-secondary); margin-bottom: 8px;">
+            Use this key in your scripts to fetch live numbers and poll for incoming OTPs:
+          </p>
+<div style="display: flex; gap: 6px; margin-bottom: 8px;">
+<input autocapitalize="off" autocomplete="new-password" autocorrect="off" class="clean-input" data-lpignore="true" id="api-key-text-box" readonly="" spellcheck="false" type="password" value=""/>
+<button class="btn-action-secondary" id="btn-toggle-key-eye" title="View / Hide API Key">👁️</button>
+<button class="btn-action-secondary" id="btn-copy-api-key-val" title="Copy API Key">📋</button>
+</div>
+<div style="display: flex; gap: 6px;">
+<button class="btn-action-secondary" id="btn-regen-key-action">↻ Regenerate</button>
+<button class="btn-action-danger" id="btn-revoke-key-action">Revoke</button>
+</div>
+</div>
+<!-- Endpoints Directory -->
+<div class="clean-card">
+<div class="card-headline">
+<div class="headline-text">📖 REST Endpoints (Direct Firebase &amp; Developer APIs)</div>
+</div>
+<!-- Endpoint 1: Panel Devices Map -->
+<div style="margin-bottom: 12px;">
+<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px;">
+<code style="font-family: var(--font-mono); font-size: 11.5px; color: var(--neon-mint);">1. GET /api/devices (or /devices)</code>
+<button class="btn-action-secondary" onclick="copyInputVal('url-endpoint-devices')" style="font-size: 10px; padding: 2px 6px;">Copy</button>
+</div>
+<div style="font-size: 10.5px; color: var(--text-muted); margin-bottom: 4px;">Returns mapping of all panel URLs to their device IDs: <code>{"panel_url": ["id1", "id2"]}</code></div>
+<input class="clean-input" id="url-endpoint-devices" readonly="" style="font-size: 10.5px; font-family: var(--font-mono);" type="text" value="http://localhost:8080/api/devices?key=YOUR_KEY"/>
+</div>
+<!-- Endpoint 2: Find Number -->
+<div style="margin-bottom: 12px;">
+<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px;">
+<code style="font-family: var(--font-mono); font-size: 11.5px; color: var(--neon-cyan);">2. GET /api/{panel_url}/{device_id}/findnumber</code>
+<button class="btn-action-secondary" onclick="copyInputVal('url-endpoint-findnumber')" style="font-size: 10px; padding: 2px 6px;">Copy</button>
+</div>
+<div style="font-size: 10.5px; color: var(--text-muted); margin-bottom: 4px;">Fetches all SMS from Firebase RTDB and extracts the 10-digit carrier phone number</div>
+<input class="clean-input" id="url-endpoint-findnumber" readonly="" style="font-size: 10.5px; font-family: var(--font-mono);" type="text" value="http://localhost:8080/api/{panel_url}/{device_id}/findnumber?key=YOUR_KEY"/>
+</div>
+<!-- Endpoint 3: Check Keyword -->
+<div style="margin-bottom: 12px;">
+<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px;">
+<code style="font-family: var(--font-mono); font-size: 11.5px; color: var(--neon-amber);">3. GET /api/{panel_url}/{device_id}/check=SWiggy</code>
+<button class="btn-action-secondary" onclick="copyInputVal('url-endpoint-check')" style="font-size: 10px; padding: 2px 6px;">Copy</button>
+</div>
+<div style="font-size: 10.5px; color: var(--text-muted); margin-bottom: 4px;">Checks if keyword exists in device SMS. Returns <code>result: false</code> if found even 1 time (taken), <code>true</code> if fresh.</div>
+<input class="clean-input" id="url-endpoint-check" readonly="" style="font-size: 10.5px; font-family: var(--font-mono);" type="text" value="http://localhost:8080/api/{panel_url}/{device_id}/check=SWiggy?key=YOUR_KEY"/>
+</div>
+<!-- Endpoint 4: Direct RTDB Polling -->
+<div style="margin-bottom: 12px;">
+<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px;">
+<code style="font-family: var(--font-mono); font-size: 11.5px; color: var(--neon-mint);">4. GET /api/{panel_url}/{device_id}/poll</code>
+<button class="btn-action-secondary" onclick="copyInputVal('url-endpoint-poll')" style="font-size: 10px; padding: 2px 6px;">Copy</button>
+</div>
+<div style="font-size: 10.5px; color: var(--text-muted); margin-bottom: 4px;">Direct Firebase RTDB sub-second polling for incoming SMS &amp; OTP</div>
+<input class="clean-input" id="url-endpoint-poll" readonly="" style="font-size: 10.5px; font-family: var(--font-mono);" type="text" value="http://localhost:8080/api/{panel_url}/{device_id}/poll?key=YOUR_KEY"/>
+</div>
+<!-- Endpoint 5: Number SMS History -->
+<div>
+<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px;">
+<code style="font-family: var(--font-mono); font-size: 11.5px; color: var(--neon-blue);">5. GET /api/{number}/sms</code>
+<button class="btn-action-secondary" onclick="copyInputVal('url-endpoint-sms')" style="font-size: 10px; padding: 2px 6px;">Copy</button>
+</div>
+<input class="clean-input" id="url-endpoint-sms" readonly="" style="font-size: 10.5px; font-family: var(--font-mono);" type="text" value="http://localhost:8080/api/9876543210/sms?key=YOUR_KEY"/>
+</div>
+</div>
+<!-- Python Polling Script -->
+<div class="clean-card">
+<div class="card-headline">
+<div class="headline-text">🐍 Python Polling Script</div>
+<button class="btn-action-secondary" id="btn-copy-python-snippet" style="font-size: 11px;">📋 Copy</button>
+</div>
+<pre id="python-snippet-box" style="background: var(--bg-surface); padding: 10px; border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: 10.5px; color: var(--text-secondary); overflow-x: auto; line-height: 1.45;"></pre>
+</div>
+</section>
+<!-- ========================================== -->
+<!-- TAB 5: PROFILE & REFERRALS                 -->
+<!-- ========================================== -->
+<section class="view-section" id="tab-profile">
+<!-- Profile Card -->
+<div class="clean-card">
+<div style="display: flex; align-items: center; gap: 12px;">
+<div style="width: 42px; height: 42px; border-radius: var(--radius-sm); background: linear-gradient(135deg, #1e293b, #334155); display: flex; align-items: center; justify-content: center; font-size: 20px;">
+              👤
+            </div>
+<div style="flex: 1;">
+<div id="profile-user-name" style="font-size: 15px; font-weight: 700;">Telegram User</div>
+<div style="font-size: 11.5px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; margin-top: 2px;">
+<span id="profile-user-handle">@username</span>
+<span class="status-pill" id="profile-tier-badge">Free Tier</span>
+</div>
+</div>
+<button class="btn-action-secondary" id="btn-refresh-profile">↻ Sync</button>
+</div>
+</div>
+<!-- Referral Program Details -->
+<div class="clean-card">
+<div class="card-headline">
+<div class="headline-text">👥 Referral Program &amp; Rewards</div>
+<span class="status-pill" style="color: var(--neon-mint);">Instant Unlock</span>
+</div>
+<p style="font-size: 11.5px; color: var(--text-secondary); margin-bottom: 8px;">
+            Share your personal invite link. Each successful referral unlocks:
+          </p>
+<ul style="font-size: 11.5px; color: var(--text-secondary); margin-left: 18px; margin-bottom: 10px; line-height: 1.6;">
+<li>👑 <b>10 Minutes Pro Panel Access</b> (All users' panels pool)</li>
+<li>⚡ <b>+24 Hours Full Console Access</b></li>
+<li>🔑 <b>+1 Hour Developer API Access</b></li>
+</ul>
+<div style="display: flex; gap: 6px;">
+<input class="clean-input" id="referral-input-box" readonly="" type="text" value=""/>
+<button class="btn-action-secondary" id="btn-copy-ref-action">📋 Copy</button>
+</div>
+</div>
+<!-- Admin System Settings (Visible to Admin only) -->
+<div class="clean-card" id="admin-global-settings-card" style="display: none; border-color: rgba(245, 158, 11, 0.4);">
+<div class="card-headline">
+<div class="headline-text">👑 Admin Global Governance</div>
+<span class="status-pill" style="color: var(--neon-amber);">Master Admin</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px; margin-top: 6px;">
+<!-- Toggle 1: Console Free vs Mandatory Referral -->
+<div class="admin-ctrl-row">
+<span class="admin-ctrl-label">Console Access Mode:</span>
+<button class="admin-toggle-switch-btn active-on" id="btn-admin-toggle-console-ref">
+                ⚡ Free Console (All Users)
+              </button>
+</div>
+<!-- Toggle 2: Pro Panel Pool Status -->
+<div class="admin-ctrl-row">
+<span class="admin-ctrl-label">Pro Panel Pool Status:</span>
+<button class="admin-toggle-switch-btn active-on" id="btn-admin-toggle-pro-active">
+                🟢 Pro Pool: ACTIVE
+              </button>
+</div>
+<!-- Toggle 3: Pro Pool Source Mode -->
+<div class="admin-ctrl-row">
+<span class="admin-ctrl-label">Pro Pool Panel Source:</span>
+<button class="admin-toggle-switch-btn" id="btn-admin-toggle-pro-source">
+                👥 All Users' Panels
+              </button>
+</div>
+<!-- Toggle 4: User Developer API Keys -->
+<div class="admin-ctrl-row">
+<span class="admin-ctrl-label">User Developer APIs:</span>
+<button class="admin-toggle-switch-btn active-on" id="btn-admin-toggle-user-api">
+                🟢 Enabled for Users
+              </button>
+</div>
+<!-- Toggle 5: System Maintenance Mode -->
+<div class="admin-ctrl-row">
+<span class="admin-ctrl-label">Platform Status:</span>
+<button class="admin-toggle-switch-btn active-on" id="btn-admin-toggle-maint">
+                🟢 Online &amp; Live
+              </button>
+</div>
+<!-- Preset 6: Pro Access per Referral -->
+<div class="admin-ctrl-row" style="flex-direction: column; align-items: flex-start; gap: 6px;">
+<div style="display: flex; justify-content: space-between; width: 100%;">
+<span class="admin-ctrl-label">Pro Unlock per Referral:</span>
+<span id="lbl-admin-pro-mins" style="font-size: 11px; font-weight: 700; color: var(--neon-mint);">10 Mins</span>
+</div>
+<div class="admin-preset-pills-wrap">
+<button class="admin-preset-pill active" onclick="setAdminProDuration('10')" type="button">10 Mins</button>
+<button class="admin-preset-pill" onclick="setAdminProDuration('15')" type="button">15 Mins</button>
+<button class="admin-preset-pill" onclick="setAdminProDuration('30')" type="button">30 Mins</button>
+<button class="admin-preset-pill" onclick="setAdminProDuration('60')" type="button">60 Mins</button>
+</div>
+<!-- Custom Pro Duration Input -->
+<div style="display: flex; gap: 6px; width: 100%; margin-top: 4px;">
+<input class="clean-input" id="admin-custom-pro-val" min="1" placeholder="e.g. 45" style="font-size: 11px; padding: 6px 10px; width: 110px;" type="number"/>
+<select class="clean-input" id="admin-custom-pro-unit" style="font-size: 11px; padding: 6px 6px; width: 90px;">
+<option value="mins">Minutes</option>
+<option value="hours">Hours</option>
+</select>
+<button class="btn-action-primary" id="btn-admin-save-custom-pro" style="font-size: 11px; padding: 6px 12px; white-space: nowrap;" type="button">Set Custom</button>
+</div>
+</div>
+<!-- Preset 7: Initial Free Hours for New Users -->
+<div class="admin-ctrl-row" style="flex-direction: column; align-items: flex-start; gap: 6px;">
+<div style="display: flex; justify-content: space-between; width: 100%;">
+<span class="admin-ctrl-label">New User Welcome Hours:</span>
+<span id="lbl-admin-init-hours" style="font-size: 11px; font-weight: 700; color: var(--neon-cyan);">24 Hours</span>
+</div>
+<div class="admin-preset-pills-wrap">
+<button class="admin-preset-pill active" onclick="setAdminNewUserHours('24')" type="button">24h Trial</button>
+<button class="admin-preset-pill" onclick="setAdminNewUserHours('48')" type="button">48h Trial</button>
+<button class="admin-preset-pill" onclick="setAdminNewUserHours('72')" type="button">72h Trial</button>
+<button class="admin-preset-pill" onclick="setAdminNewUserHours('0')" type="button">Unlimited</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Admin Gift Codes Management (Admin Only) -->
+<div class="clean-card" id="admin-gift-codes-card" style="display: none; border: 1px solid rgba(0, 242, 254, 0.25);">
+<div class="card-headline">
+<div class="headline-text">🎟️ Active Gift Codes (Admin)</div>
+<button class="btn-action-secondary" id="btn-refresh-admin-gifts" onclick="loadAdminGiftCodes()" style="font-size: 11px; padding: 4px 8px;">↻ Refresh</button>
+</div>
+<div id="admin-gift-codes-list" style="margin-top: 8px; display: flex; flex-direction: column; gap: 6px;">
+<div style="font-size: 11.5px; color: var(--text-muted); text-align: center; padding: 8px 0;">Loading codes...</div>
+</div>
+</div>
+<!-- Redeem Gift Code -->
+<div class="clean-card">
+<div class="card-headline">
+<div class="headline-text">🎟️ Redeem Promo / Gift Code</div>
+<span class="badge-mini badge-green" id="gift-active-chip" style="display: none;">👑 Pro Active</span>
+</div>
+<div style="display: flex; gap: 6px;">
+<input class="clean-input" id="gift-code-text-box" placeholder="ENTER CODE (e.g. VIP24)" type="text"/>
+<button class="btn-action-secondary" id="btn-claim-gift-action">Claim</button>
+</div>
+<div id="gift-claim-status-info" style="display: none; margin-top: 10px; font-size: 11.5px; padding: 8px 12px; border-radius: var(--radius-xs); line-height: 1.45;"></div>
+</div>
+</section>
+</main>
+<!-- Bottom Navigation Dock (5 Clean Tabs) -->
+<nav class="bottom-dock">
+<button class="dock-tab active" data-tab="tab-feed">
+<svg fill="none" stroke-width="2" viewbox="0 0 24 24">
+<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+</svg>
+<span>Stream</span>
+</button>
+<button class="dock-tab" data-tab="tab-checker">
+<svg fill="none" stroke-width="2" viewbox="0 0 24 24">
+<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+</svg>
+<span>Checker</span>
+</button>
+<button class="dock-tab" data-tab="tab-panels">
+<svg fill="none" stroke-width="2" viewbox="0 0 24 24">
+<rect height="14" rx="2" width="20" x="2" y="3"></rect>
+<line x1="8" x2="16" y1="21" y2="21"></line>
+<line x1="12" x2="12" y1="17" y2="21"></line>
+</svg>
+<span>Panels</span>
+</button>
+<button class="dock-tab" data-tab="tab-api">
+<svg fill="none" stroke-width="2" viewbox="0 0 24 24">
+<polyline points="16 18 22 12 16 6"></polyline>
+<polyline points="8 6 2 12 8 18"></polyline>
+</svg>
+<span>API</span>
+</button>
+<button class="dock-tab" data-tab="tab-profile">
+<svg fill="none" stroke-width="2" viewbox="0 0 24 24">
+<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+<circle cx="12" cy="7" r="4"></circle>
+</svg>
+<span>Account</span>
+</button>
+</nav>
+</div>
+<!-- Dedicated Number Full-Screen View (Positioned directly below app header) -->
+<div class="fullscreen-view" id="drawer-modal" style="display: none;">
+<!-- Top Sub-Header with Back Button, Target Number, Status & Action Icons -->
+<div class="fs-view-header">
+<button class="fs-back-btn" id="btn-close-drawer-sheet" title="Back to Feed">
+<svg fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" style="width: 16px; height: 16px;" viewbox="0 0 24 24">
+<line x1="19" x2="5" y1="12" y2="12"></line>
+<polyline points="12 19 5 12 12 5"></polyline>
+</svg>
+<span>Back</span>
+</button>
+<div class="fs-header-title-box">
+<div class="fs-header-number" id="drawer-target-num">+91 00000 00000</div>
+<div class="fs-header-status-line">
+<span class="status-indicator-dot online" id="drawer-live-dot"></span>
+<span id="drawer-poll-status-text">Direct Firebase RTDB (6s)</span>
+</div>
+</div>
+<div class="fs-header-actions">
+<button class="btn-micro-action" id="btn-drawer-copy-num" title="Copy Number">📋 Copy</button>
+<button class="btn-micro-action btn-poll-manual" id="btn-drawer-manual-poll" title="Manual Poll Now">
+<span class="btn-poll-icon" id="drawer-poll-icon">↻</span> Poll
+        </button>
+</div>
+</div>
+<!-- Scrollable View Body -->
+<div class="fs-view-body">
+<!-- Search in this number's messages (Always pinned at top) -->
+<div class="search-field-box" style="margin: 0 0 6px 0;">
+<svg fill="none" stroke-width="2" viewbox="0 0 24 24">
+<circle cx="11" cy="11" r="8"></circle>
+<line x1="21" x2="16.65" y1="21" y2="16.65"></line>
+</svg>
+<input class="clean-input with-icon" id="drawer-search-input" placeholder="Search in this number's messages..." style="font-size: 11.5px;" type="text"/>
+</div>
+<!-- Minimal Loading Indicator for Messages -->
+<div class="minimal-loader-bar" id="drawer-messages-loader" style="display: none; margin: 0 0 6px 0;">
+<span class="inline-spinner"></span>
+<span class="loader-txt">Loading messages...</span>
+</div>
+<!-- Dual SIM Switcher Bar inside Drawer (Auto-populated if device has Dual SIM) -->
+<div class="drawer-sim-toggle-bar" id="drawer-sim-toggle-bar" style="display: none;"></div>
+<!-- Deep App Keyword Checker Strip inside Number View -->
+<div class="single-check-section" style="margin-bottom: 6px;">
+<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+<span style="font-size: 10.5px; font-weight: 700; color: var(--neon-cyan); text-transform: uppercase;">⚡ Quick App Checker:</span>
+<span style="font-size: 9.5px; color: var(--text-muted);">Deep Analysing...</span>
+</div>
+<div class="filter-pills-bar" style="margin-bottom: 4px;">
+<button class="filter-pill" onclick="checkNumberAppInDrawer('swiggy')">Swiggy</button>
+<button class="filter-pill" onclick="checkNumberAppInDrawer('zomato')">Zomato</button>
+<button class="filter-pill" onclick="checkNumberAppInDrawer('flipkart')">Flipkart</button>
+<button class="filter-pill" onclick="checkNumberAppInDrawer('whatsapp')">WhatsApp</button>
+<button class="filter-pill" onclick="checkNumberAppInDrawer('custom')">Custom...</button>
+</div>
+<div id="drawer-app-check-result" style="display: none; font-size: 11.5px; padding: 6px 10px; border-radius: var(--radius-xs); margin-bottom: 4px; line-height: 1.4;"></div>
+</div>
+<!-- Messages Stream (Differential update without clearing existing msgs) -->
+<div class="fs-messages-stream" id="drawer-messages-stream">
+<!-- Messages injected here directly from Firebase -->
+</div>
+</div>
+</div>
+<!-- Dedicated Panel Full-Screen View (Positioned directly below app header) -->
+<div class="fullscreen-view" id="panel-detail-modal" style="display: none;">
+<!-- Top Sub-Header with Back Button, Panel Name & Copy All Action -->
+<div class="fs-view-header">
+<button class="fs-back-btn" id="btn-close-panel-modal" title="Back to Panels">
+<svg fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" style="width: 16px; height: 16px;" viewbox="0 0 24 24">
+<line x1="19" x2="5" y1="12" y2="12"></line>
+<polyline points="12 19 5 12 12 5"></polyline>
+</svg>
+<span>Back</span>
+</button>
+<div class="fs-header-title-box">
+<div class="fs-header-number" id="panel-modal-title">Panel Live Feed</div>
+<div class="fs-header-status-line" id="panel-modal-subtitle" style="color: var(--neon-cyan);">Direct Firebase Connection</div>
+</div>
+<div class="fs-header-actions">
+<button class="btn-micro-action" id="btn-panel-copy-all-nums" title="Copy All Numbers">📋 Copy All</button>
+</div>
+</div>
+<!-- Scrollable View Body -->
+<div class="fs-view-body">
+<div class="search-field-box" style="margin-bottom: 0;">
+<svg fill="none" stroke-width="2" viewbox="0 0 24 24">
+<circle cx="11" cy="11" r="8"></circle>
+<line x1="21" x2="16.65" y1="21" y2="16.65"></line>
+</svg>
+<input class="clean-input with-icon" id="panel-modal-search-input" placeholder="Search numbers or SMS in this panel..." style="font-size: 11.5px;" type="text"/>
+</div>
+<!-- Minimal Loading Indicator for Panel Numbers -->
+<div class="minimal-loader-bar" id="panel-modal-loader" style="display: none;">
+<span class="inline-spinner"></span>
+<span class="loader-txt">Connecting directly to Firebase RTDB...</span>
+</div>
+<!-- Panel Numbers Stream -->
+<div class="fs-messages-stream" id="panel-modal-numbers-stream">
+<!-- Injected here -->
+</div>
+</div>
+</div>
+<!-- Neon Theme Swipe / Pull Refresh Toast Badge -->
+<div class="swipe-refresh-toast" id="swipe-refresh-badge" style="display: none;">
+<span class="inline-spinner"></span>
+<span id="swipe-refresh-text">↻ Refreshing...</span>
+</div>
+<!-- Toast Notification Bubble -->
+<div class="toast-notice" id="toast-bubble" style="display: none;"></div>
+<script src="assets/js/app.js"></script>
+<script>
+    // Fail-safe auto-dismiss: ensure app shell is displayed and splash is removed within 350ms
+    (function() {
+      function dismiss() {
+        var splash = document.getElementById('app-splash');
+        var shell = document.getElementById('app-shell');
+        if (shell && shell.style.display === 'none') {
+          shell.style.display = 'flex';
+        }
+        if (splash && splash.style.display !== 'none') {
+          splash.style.opacity = '0';
+          splash.style.pointerEvents = 'none';
+          setTimeout(function() { splash.style.display = 'none'; }, 150);
+        }
+      }
+      setTimeout(dismiss, 350);
+    })();
+  </script>
+<script>if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {})); }</script></body>
+</html>
